@@ -1,0 +1,115 @@
+MUL R3 R1 R2
+ADD R5 R3 R4
+ADD R7 R2 R6
+ADD R10 R8 R9
+MUL R11 R7 R10
+ADD R5 R5 R11
+
+
+LD F6 100
+LD F2 200
+MUL F0 F2 F4
+SUB F8 F2 F6
+
+1 LD R1 100
+2 LD R2 200
+3 ADDI R4 R1 0 
+4 MUL R3 R2 R1
+5 SUBI R4 R4 1
+6 BNEZ R4 3
+
+1 SUB R1 R2 R3
+2 BNEZ R4 1
+
+
+
+    public static void ExecuteALUInstruction(ReservationStation[] reservationStations) {
+        for (int i = 0; i < reservationStations.length; i++) {
+            ReservationStation reservationStation = reservationStations[i];
+            if (reservationStation.isBusy()) {
+
+                // Check if Qj and Qk are not null and equal to the tag on the bus
+                if (reservationStation.getQj() != null && reservationStation.getQj().equals(bus.getTag())) {
+                    reservationStation.setQj(null);
+                    reservationStation.setVj(bus.getValue());
+                }
+
+                if (reservationStation.getQk() != null && reservationStation.getQk().equals(bus.getTag())) {
+                    reservationStation.setQk(null);
+                    reservationStation.setVk(bus.getValue());
+                }
+
+                // Check if both operands are ready and the instruction didn't arrive in the
+                // current clock cycle
+                if (reservationStation.getQj() == null && reservationStation.getQk() == null
+                        && reservationStation.getArrivalTime() != clockCycle) {
+                    int timeRemaining = reservationStation.getTimeRemaining();
+
+                    if (timeRemaining == 0) {
+                        // Calculate and set the result of the operation
+                        reservationStation.setResult(getExecutionResult(reservationStation));
+                        // Decrement timeRemaining in a separate statement
+                        reservationStation.setTimeRemaining(timeRemaining - 1);
+                        logs.add("Station " + reservationStation.getTag() + " is done executing and its result is "
+                                + reservationStation.getResult() + ".");
+                    } else if (timeRemaining > 0) {
+                        // Decrement timeRemaining and log the current execution state
+                        reservationStation.setTimeRemaining(timeRemaining - 1);
+                        logs.add("Station " + reservationStation.getTag() + " is currently executing.");
+                    }
+                }
+            }
+        }
+
+    }
+
+    public static void ExecuteLoadInstruction(LoadBuffer loadBuffers) {
+        for (LoadBufferEntry loadBufferEntry : loadBuffers.buffer) {
+            if (loadBufferEntry.isBusy()) {
+                if (loadBufferEntry.timeRemaining == 0) {
+                    Register destination = registerFile.getRegisterByName(loadBufferEntry.getDestination());
+                    // loadBufferEntry.setDestination(destination.getName());
+                    // loadBufferEntry.setTimeRemaining(loadBufferEntry.timeRemaining--);
+                    bus.setValue(loadBufferEntry.getResult());
+                    logs.add("Buffer " + loadBufferEntry.tag + " is done executing and the output is "
+                            + loadBufferEntry.getDestination());
+                                            loadBufferEntry.timeRemaining--;
+                    //loadBufferEntry.setReady(true);
+                } else if (loadBufferEntry.timeRemaining > 0) {
+                    loadBufferEntry.timeRemaining--;
+                    logs.add("Buffer " + loadBufferEntry.tag + " is currently executing.");
+                } else {
+                    loadBufferEntry.timeRemaining--;
+                    logs.add("Buffer " + loadBufferEntry.tag + " is currently writing back.");
+                }
+            }
+        }
+    }
+
+    public static void ExecuteStoreInstruction(StoreBuffer storeBuffer) {
+        for (StoreBufferEntry storeBufferEntry : storeBuffer.buffer) {
+            if (storeBufferEntry.isBusy()) {
+                storeBufferEntry.timeRemaining--;
+                if (storeBufferEntry.getTag() == bus.getTag()) {
+                    storeBufferEntry.setQ(null);
+                    storeBufferEntry.setValue(bus.getValue());
+                }
+                if (storeBufferEntry.getQ() == null && storeBufferEntry.getArrivalTime() != clockCycle) {
+                    storeBufferEntry.timeRemaining--;
+                    if (storeBufferEntry.timeRemaining == 0) {
+                        storeBufferEntry.setBusy(false);
+                        storeBufferEntry.setEffectiveAddress(-1);
+                        storeBufferEntry.setValue(0);
+                        storeBufferEntry.setQ(null);
+                        storeBufferEntry.setSource(null);
+                        storeBufferEntry.setReady(false);
+                        storeBufferEntry.setArrivalTime(-1);
+                    }
+                    if (storeBufferEntry.timeRemaining == 1) {
+                        memory[storeBufferEntry.getEffectiveAddress()] = storeBufferEntry.getValue();
+                        storeBufferEntry.timeRemaining--;
+                    }
+                }
+            }
+        }
+    }
